@@ -10,7 +10,7 @@ int socket_udp(int flags);
 void init_sockaddr_in(struct sockaddr_in *name, const char *hostname, uint16_t port);
 void init_broadcast_sockaddr_in(struct sockaddr_in *name, uint16_t port);
 int sockaddr_in_equal(const struct sockaddr_in *a, const struct sockaddr_in *b);
-void print_sockaddr_in(FILE *fp, struct sockaddr_in a);
+//void print_sockaddr_in(FILE *fp, struct sockaddr_in a);
 void bind_inet(int fd, const char *hostname, int port);
 void connect_inet(int fd, const char *hostname, int port);
 int xsendto(int fd, const void *data, size_t n, int flags, struct sockaddr *addr, socklen_t length);
