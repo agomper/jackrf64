@@ -22,21 +22,26 @@ protected:
     double sampleRate;
     int jackBufferSize;             //Internal buffer size in frames.
     float *jackBuffer;              //Internal buffer of 32 bit floats.
-    int channels;                   //Num channels
+    int channels;            //Num channels
     jack_ringbuffer_t *ringBuffer;  //Pointer to a jack ring buffer
-    int pipeAux[2];                 //Interprocess communication pipe. Thread related.
+    int comPipe[2];          //Interprocess communication pipe. Thread related.
     jack_port_t *jackPort[2];       //Jack ports = Channels
 public:
     JackClient();
     jack_client_t *open_jack_client(char *name);
     jack_client_t *getClientfd() const;
+    void jack_client_activate(jack_client_t *client);
+    void jack_port_make_standard(int mode);
     void setClientfd(jack_client_t *value);
-    void jack_ringbuffer_read_exactly (int nBytesToRead);
+    void jack_ringbuffer_read_exactly(int nBytesToRead);
+    void jack_ringbuffer_write_exactly(int nBytesToWrite);
     int getJackBufferSize() const;
     int getChannels() const;
     jack_ringbuffer_t *getRingBuffer() const;
     jack_port_t *getJackPort(int index);
+    int getComPipe(int index);
     float *getJackBuffer() const;
+    int jack_ringbuffer_wait_for_read(int payload, int pipeFd);
 };
 
 #endif // JACKCLIENT_H

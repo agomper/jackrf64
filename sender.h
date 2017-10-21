@@ -8,6 +8,7 @@ class Sender : public JackClient, public NetClient{
 public:
     Sender();
     void sender_socket_test();
+    void finish();
 };
 
 #endif // SENDER_H

@@ -24,5 +24,15 @@ void Receiver::receiver_socket_test()
     /* never exits */
 }
 
+void Receiver::finish()
+{
+    close(socketfd);
+    jack_ringbuffer_free(ringBuffer);
+    jack_client_close(clientfd);
+    close(comPipe[0]);
+    close(comPipe[1]);
+    free(jackBuffer);
+}
+
 
 

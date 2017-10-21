@@ -8,6 +8,7 @@ class Receiver : public JackClient, public NetClient{
 public:
     Receiver();
     void receiver_socket_test();
+    void finish();
 };
 
 #endif // RECEIVER_H
