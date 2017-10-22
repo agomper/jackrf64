@@ -11,7 +11,6 @@ SOURCES += main.cpp \
     receiver.cpp \
     jackclient.cpp \
     soundfile.cpp \
-    c-common/byte-order.c \
     c-common/client.c \
     c-common/file.c \
     c-common/jack-client.c \
@@ -21,7 +20,8 @@ SOURCES += main.cpp \
     c-common/network.c \
     c-common/sound-file.c \
     c-common/time-timeval.c \
-    netclient.cpp
+    netclient.cpp \
+    c-common/byte-order.c
 
 
 HEADERS += \

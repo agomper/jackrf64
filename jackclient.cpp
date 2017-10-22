@@ -49,7 +49,7 @@ JackClient::JackClient() {
     //xmalloc(). The motto is succeed or die. If it fails to allocate memory,
     //it will terminate your program and print an error message
     jackBuffer = (float *) malloc(jackBufferSize);
-    cout<<"JackRF64 buffer created with a size of: "<<jackBufferSize<<" bits. \n";
+    //cout<<"JackRF64 buffer created with a size of: "<<jackBufferSize<<" bytes. \n";
     //Allocates a ringbuffer data structure of a specified size.
     ringBuffer = jack_ringbuffer_create(jackBufferSize);
     //The pipe is then used for communication either between the parent or child
@@ -114,6 +114,16 @@ void JackClient::jack_ringbuffer_read_exactly(int nBytesToRead)
   }
 }
 
+void JackClient::jack_ringbuffer_read_exactly(char *buffer, int nBytesToRead)
+{
+  int BytesRead = jack_ringbuffer_read(ringBuffer, buffer, nBytesToRead);
+  if(BytesRead != nBytesToRead) {
+    cout<<"Error reading RingBuffer. Required = "<<nBytesToRead<<
+          " Done= "<<BytesRead<<" \n.";
+    exit(1);
+  }
+}
+
 void JackClient::jack_ringbuffer_write_exactly(int nBytesToWrite)
 {
   int BytesWrote = jack_ringbuffer_write(ringBuffer,
@@ -124,6 +134,17 @@ void JackClient::jack_ringbuffer_write_exactly(int nBytesToWrite)
     exit(1);
   }
 }
+
+void JackClient::jack_ringbuffer_write_exactly(const char *buffer, int nBytesToWrite)
+{
+  int BytesWrote = jack_ringbuffer_write(ringBuffer, buffer, nBytesToWrite);
+  if(BytesWrote != nBytesToWrite) {
+      cout<<"Error writing RingBuffer. Required = "<<nBytesToWrite<<
+            " Done= "<<BytesWrote<<" \n.";
+    exit(1);
+  }
+}
+
 
 void JackClient::jack_port_make_standard(int mode)
 {

@@ -34,7 +34,9 @@ public:
     void jack_port_make_standard(int mode);
     void setClientfd(jack_client_t *value);
     void jack_ringbuffer_read_exactly(int nBytesToRead);
+    void jack_ringbuffer_read_exactly(char *buffer, int nBytesToRead);
     void jack_ringbuffer_write_exactly(int nBytesToWrite);
+    void jack_ringbuffer_write_exactly(const char *buffer, int nBytesToWrite);
     int getJackBufferSize() const;
     int getChannels() const;
     jack_ringbuffer_t *getRingBuffer() const;

@@ -17,6 +17,12 @@ void jack_client_error_handler(const char *desc) {
   printf("Jack error: %s\n", desc);
 }
 
+
+//*************************** JACK CLIENTS (LOCAL) ***************************/
+
+/************************************************************ JACK CLIENT SEND*/
+// Write data from the JACK input ports to the ring buffer.
+//jack_nframes_t n = Frames/Period.
 int jack_callback_sender (jack_nframes_t nframes, void *arg){
     int i, j;                         //Iteradores auxiliares
     float *in[senderObj.getChannels()];
@@ -53,6 +59,9 @@ int jack_callback_sender (jack_nframes_t nframes, void *arg){
     return 0;
 }
 
+
+/************************************************************ JACK CLIENT RECV*/
+// Write data from ring buffer to JACK output ports.
 int jack_callback_receiver (jack_nframes_t nframes, void *arg){
     if(nframes >= recvObj.getJackBufferSize()) {
         cout<< "Fatal error. Not enough space!. "
@@ -100,15 +109,93 @@ int jack_callback_receiver (jack_nframes_t nframes, void *arg){
 }
 
 
+
+/************************ THREADS (NETWORK) ******************************/
+
 //SENDER
 // Read data from ring buffer and write to udp port. Packets are
 // always sent with a full payload.
-void *sender_thread(void *sender) {
+void *sender_thread(void *arg) {
+    Sender *sender = (Sender *) arg;
+    networkPacket p;                           //Network package
+    p.index = 0;                          //Inicializa el indice a 0
+    int localIndex = 0;
 
+    while(1) {
+        sender->jack_ringbuffer_wait_for_read(sender->getPayloadBytes(),
+                                              sender->getComPipe(0));
+
+        localIndex++;
+        p.index = localIndex;
+        printf("Indice nuevo paquete. (%d) %d\n", p.index, localIndex);
+        p.channels = sender->getChannels();
+        p.frames = sender->getPayloadSamples() / sender->getChannels();
+
+        sender->jack_ringbuffer_read_exactly((char *)&(p.data),
+                                             sender->getPayloadBytes());
+        sender->packet_sendto(&p);
+    }
+    return NULL;
 }
 
 
-//------------------------------MAIN------------------------------------//
+//RECEIVER
+// Read data from UDP port and write to ring buffer.
+void *receiver_thread(void *arg) {
+    Receiver *receiver = (Receiver *) arg;
+    networkPacket p;                       //Paquete P = Network
+    int next_packet = -1;
+
+    //Fichero
+    FILE *filed;
+    if ((filed = fopen ("Test", "w")) == NULL) {
+        printf("Error opening the file. \n");
+        exit(1);
+    }
+    else {
+        printf("File created. \n");
+    }
+
+    while(1) {
+        //Llama al metodo para recibir 1 paquete de P.
+        receiver->packet_recv(&p);
+
+        //Comprobaciones del indice y numero de canales
+        if(p.index != next_packet/* || next_packet != -1*/) {
+            printf("jack-udp recv: out of order packet "
+                    "arrival (Esperado, Recibido) (%d, %d)\n",
+                    next_packet, p.index);
+            //exit(1);
+        }
+        if(p.channels != receiver->getChannels()) {
+            printf("jack-udp recv: channel mismatch packet "
+                    "arrival (Esperado, Recibido) (%d != %d)\n",
+                    p.channels, receiver->getChannels());
+            exit(1);
+        }
+
+        //Comprueba el espacio que tiene para escribir en el RingBuffer
+        int bytes_available = (int) jack_ringbuffer_write_space(receiver->getRingBuffer());
+        //Si no hay espacio, avisa.
+        if(receiver->getPayloadBytes() > bytes_available) {
+            printf("jack-udp recv: buffer overflow (%d > %d)\n",
+                    (int) receiver->getPayloadBytes(), bytes_available);
+        } else {
+            receiver->jack_ringbuffer_write_exactly((char *) p.data,
+                                          (size_t) receiver->getPayloadBytes());
+            //Fichero
+            fprintf(filed, "%d \n", p.index);
+        }
+
+        //Actualiza el indice del paquete que debe llegar.
+        next_packet = p.index + 1;
+    }
+    return NULL;
+}
+
+
+
+/*********************************** MAIN *************************************/
 int main () {
     int modeSelected;
     int intAux;
@@ -163,8 +250,8 @@ int main () {
         recvObj.jack_client_activate(recvObj.getClientfd());
 
         cout<<"Creating receiver thread. \n";
-        /*intAux = pthread_create(&netcomThread,NULL,
-                       receiver_thread, NULL);*/
+        intAux = pthread_create(&netcomThread,NULL,
+                       receiver_thread, &recvObj);
         if (intAux != 0)
             cout<<"Receiver thread error. \n";
     }
