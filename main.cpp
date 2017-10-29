@@ -27,6 +27,9 @@ int jack_callback_sender (jack_nframes_t nframes, void *arg){
     int i, j;                         //Iteradores auxiliares
     float *in[senderObj.getChannels()];
 
+    float fileBuffer[nframes*senderObj.getChannels()];
+    senderObj.getSndfd().read(fileBuffer, nframes*senderObj.getChannels());
+
     //Los punteros in apuntan a lo mismo que los Jack port.
     //Se hace un for para igual cada i a un channel.
     for(i = 0; i < senderObj.getChannels(); i++) {
@@ -38,7 +41,8 @@ int jack_callback_sender (jack_nframes_t nframes, void *arg){
             //El j_buffer guarda los datos de cada frame para cada uno
             //de los canales. in[Canal][Frame]
             senderObj.getJackBuffer()[(i*senderObj.getChannels())+j]
-                    = (float) in[j][i];
+            //        = (float) in[j][i]; //JACK PORTS
+                      = fileBuffer[(i*senderObj.getChannels())+j];
         }
     }
 
@@ -75,7 +79,7 @@ int jack_callback_receiver (jack_nframes_t nframes, void *arg){
     //Le dice los punteros out que apunten al mismo sitio que los Jack ports.
     int i, j;
     float *out[recvObj.getChannels()];
-    float localFrame [recvObj.getChannels()];
+    float localFrame [recvObj.getChannels()*nframes];
 
     for(i = 0; i < recvObj.getChannels(); i++) {
         out[i] = (float *) jack_port_get_buffer(recvObj.getJackPort(i), nframes);
@@ -104,11 +108,11 @@ int jack_callback_receiver (jack_nframes_t nframes, void *arg){
             for(j = 0; j < recvObj.getChannels(); j++) {
                 out[j][i] = (float)
                         recvObj.getJackBuffer()[(i * recvObj.getChannels()) + j];
-                localFrame[j] = out [j][i];
+                localFrame[(i * recvObj.getChannels()) + j] = out [j][i];
             }
-            recvObj.getSndfd().writef(localFrame, recvObj.getChannels());
-        }
 
+        }
+        recvObj.getSndfd().write(localFrame, recvObj.getChannels()*nframes);
     }
 
     return 0;
@@ -216,6 +220,8 @@ int main () {
         senderObj.init_isAddress(1);
         //senderObj.sender_socket_test();
 
+        senderObj.open_file();
+
         senderObj.open_jack_client("sender_client");
         //Sensibilidad de los mensajes de error a mostrar de Jack. Minimo.
         jack_set_error_function(jack_client_error_handler);
@@ -242,7 +248,7 @@ int main () {
         recvObj.bind_isAddress();
         //recvObj.receiver_socket_test();
 
-        recvObj.create_file("WAVFile", 2, 44100, SF_FORMAT_WAV | SF_FORMAT_FLOAT);
+        recvObj.create_file("WAVFile", 2, 44100, SF_FORMAT_WAV | SF_FORMAT_PCM_16);
 
         recvObj.open_jack_client("receiver_client");
         //Sensibilidad de los mensajes de error a mostrar de Jack. Minimo.

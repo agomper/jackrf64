@@ -17,6 +17,7 @@ protected:
 public:
     SoundFile();
     void create_file(const char *fname, int channels, int srate, int fileFormat);
+    void open_file();
     void write_file();
     void read_file();
     SndfileHandle getSndfd() const;

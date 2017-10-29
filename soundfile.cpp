@@ -30,3 +30,20 @@ void SoundFile::create_file(const char *fname, int channels, int srate, int file
         exit(1);
     }
 }
+
+void SoundFile::open_file() {
+    sndfd = SndfileHandle(soundFileName);
+
+    if (sndfd != NULL) {
+        cout<<"File opened \n";
+        cout<<"Name: "<< soundFileName  <<endl;
+        cout<<"Sample rate: "<< sndfd.samplerate() <<endl;
+        //cout<<"Format: "<< sndfd.format() <<endl;
+        cout<<"Channels: "<< sndfd.channels() <<endl;
+    }
+    else {
+        cout<<"File creation error. \n";
+        printf("%s\n",sf_strerror(NULL));
+        exit(1);
+    }
+}
