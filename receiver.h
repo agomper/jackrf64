@@ -2,8 +2,9 @@
 #define RECEIVER_H
 #include "jackclient.h"
 #include "netclient.h"
+#include "soundfile.h"
 
-class Receiver : public JackClient, public NetClient{
+class Receiver : public JackClient, public NetClient, public SoundFile{
 
 public:
     Receiver();

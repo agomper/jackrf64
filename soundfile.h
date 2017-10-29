@@ -8,6 +8,7 @@
 using namespace std;
 
 class SoundFile {
+protected:
     const char *soundFileName;
     int nChannels;
     int sampleRate;
@@ -18,7 +19,7 @@ public:
     void create_file(const char *fname, int channels, int srate, int fileFormat);
     void write_file();
     void read_file();
-
+    SndfileHandle getSndfd() const;
 };
 
 #endif // SOUNDFILE_H

@@ -26,6 +26,7 @@ void Receiver::receiver_socket_test()
 
 void Receiver::finish()
 {
+    cout<<"Cerrando y liberando. \n";
     close(socketfd);
     jack_ringbuffer_free(ringBuffer);
     jack_client_close(clientfd);

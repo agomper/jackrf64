@@ -3,7 +3,7 @@
 #include "jackclient.h"
 #include "netclient.h"
 
-class Sender : public JackClient, public NetClient{
+class Sender : public JackClient, public NetClient, public SoundFile{
 
 public:
     Sender();

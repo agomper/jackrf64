@@ -63,6 +63,7 @@ int jack_callback_sender (jack_nframes_t nframes, void *arg){
 /************************************************************ JACK CLIENT RECV*/
 // Write data from ring buffer to JACK output ports.
 int jack_callback_receiver (jack_nframes_t nframes, void *arg){
+    //Nframes = Frames/Period = = Buffer de JACK = 1024
     if(nframes >= recvObj.getJackBufferSize()) {
         cout<< "Fatal error. Not enough space!. "
                "JackRF64 buffer: "<<recvObj.getJackBufferSize()<<
@@ -73,7 +74,9 @@ int jack_callback_receiver (jack_nframes_t nframes, void *arg){
     //Conversion del RingBuffer a Jack Ports
     //Le dice los punteros out que apunten al mismo sitio que los Jack ports.
     int i, j;
-    float *out[2];
+    float *out[recvObj.getChannels()];
+    float localFrame [recvObj.getChannels()];
+
     for(i = 0; i < recvObj.getChannels(); i++) {
         out[i] = (float *) jack_port_get_buffer(recvObj.getJackPort(i), nframes);
     }
@@ -101,8 +104,11 @@ int jack_callback_receiver (jack_nframes_t nframes, void *arg){
             for(j = 0; j < recvObj.getChannels(); j++) {
                 out[j][i] = (float)
                         recvObj.getJackBuffer()[(i * recvObj.getChannels()) + j];
+                localFrame[j] = out [j][i];
             }
+            recvObj.getSndfd().writef(localFrame, recvObj.getChannels());
         }
+
     }
 
     return 0;
@@ -235,6 +241,8 @@ int main () {
         recvObj.init_isAddress(2);
         recvObj.bind_isAddress();
         //recvObj.receiver_socket_test();
+
+        recvObj.create_file("WAVFile", 2, 44100, SF_FORMAT_WAV | SF_FORMAT_FLOAT);
 
         recvObj.open_jack_client("receiver_client");
         //Sensibilidad de los mensajes de error a mostrar de Jack. Minimo.
