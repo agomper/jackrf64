@@ -11,7 +11,7 @@ extern "C" {
 #include <stdint.h>
 
 typedef struct {
-  int index;                //Identificador del paquete
+  uint32_t index;                //Identificador del paquete
   uint16_t channels;             //Num channels
   uint16_t frames;               //Num frames
   uint8_t data[1024];            //Payload
@@ -19,30 +19,27 @@ typedef struct {
 
 class NetClient {
 protected:
-    sockaddr_in isAddress;            //Internet socket address
-    int socketfd;                     //Socket File descriptor
-    int portNumber;                   //Puerto comunicacion.
-    char hostname[20];
+    sockaddr_in srISAddress;            //Internet socket address
+    sockaddr_in fpgaISAddress;            //Internet socket address
+    int srSocketFD;                     //Socket File descriptor
+    int fpgaSocketFD;
     int payloadSamples = 256;
     int payloadBytes =  payloadSamples*sizeof(float);
 public:
     NetClient();
-    void create_socket_connection();
-    void init_isAddress(int mode);
-    void bind_isAddress();
-    networkPacket getP() const;
-    void setP(const networkPacket &value);
     int getPayloadBytes() const;
     int getPayloadSamples() const;
-    void packet_sendto(networkPacket *p);
-    void packet_recv(networkPacket *p);
+    int getSrSocketFD() const;
+    int getFpgaSocketFD() const;
+    void packet_sendto(networkPacket *p, int socket, sockaddr_in address);
+    void packet_recvfrom(networkPacket *p, int socket);
     void packet_hton(networkPacket *p);
     void packet_ntoh(networkPacket *p);
     void sendto_exactly(int fd, const u8 *data, int n, struct sockaddr_in address);
     void recv_exactly(int fd, void *buf, size_t n, int flags);
     int xsendto(int fd, const void *data, size_t n, int flags, struct sockaddr *addr, socklen_t length);
     int xrecv(int fd, void *buf, size_t n, int flags);
-
+    sockaddr_in getSrISAddress();
 };
 
 #endif // NETCLIENT_H

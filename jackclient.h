@@ -43,7 +43,7 @@ public:
     jack_port_t *getJackPort(int index);
     int getComPipe(int index);
     float *getJackBuffer() const;
-    int jack_ringbuffer_wait_for_read(int payload, int pipeFd);
+    int jack_ringbuffer_wait_for_read(int payload, int pipeFd, int mode);
 };
 
 #endif // JACKCLIENT_H

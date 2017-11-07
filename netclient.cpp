@@ -1,5 +1,23 @@
 #include "netclient.h"
 
+int NetClient::getSrSocketFD() const
+{
+    return srSocketFD;
+}
+
+sockaddr_in NetClient::getSrISAddress()
+{
+    return srISAddress;
+}
+
+int NetClient::getFpgaSocketFD() const
+{
+    return fpgaSocketFD;
+}
+
+NetClient::NetClient() {
+
+}
 
 int NetClient::getPayloadBytes() const
 {
@@ -11,61 +29,15 @@ int NetClient::getPayloadSamples() const
     return payloadSamples;
 }
 
-NetClient::NetClient() {
-    portNumber = 57160;
-}
-
-void NetClient::create_socket_connection() {
-    //int socket(int domain, int type, int protocol)
-    socketfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if(socketfd < 0) {
-        perror("Socket creation failed \n");
-        exit(1);
-    }
-}
-
-void NetClient::init_isAddress(int mode) {
-  isAddress.sin_family = AF_INET;
-  isAddress.sin_port = htons(portNumber);
-
-  if(mode == 1) { //Sender
-      struct hostent *hostinfo = gethostbyname(hostname);
-      if (hostinfo == NULL) {
-          fprintf(stderr, "init_sockaddress: unknown host: %s.\n", hostname);
-          exit(1);
-      }
-      else {
-          isAddress.sin_addr = *(struct in_addr *) hostinfo->h_addr_list[0];
-      }
-  }
-  else if (mode == 2) { //Receiver
-      isAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-  }
-  else {
-      cout<<"Error! init_sockaddress() Mode no valid. \n";
-      exit (1);
-  }
-}
-
-void NetClient::bind_isAddress() {
-    //int bind(int fd, struct sockaddr *local_addr, socklen_t addr_length)
-    int err = bind(socketfd, (struct sockaddr *)&isAddress, sizeof(isAddress));
-    if(err < 0) {
-        perror("bind_inet: bind() failed");
-        exit(1);
-    }
-}
-
-void NetClient::packet_sendto(networkPacket *p) {
+void NetClient::packet_sendto(networkPacket *p, int socket, sockaddr_in address) {
   packet_hton(p); //Network byte order
-  sendto_exactly(socketfd, (unsigned char *)p, sizeof(networkPacket), isAddress);
+  sendto_exactly(socket, (unsigned char *)p, sizeof(networkPacket), address);
 }
 
-void NetClient::packet_recv(networkPacket *p) {
-  recv_exactly(socketfd, (char *)p, sizeof(networkPacket), 0); //Network
+void NetClient::packet_recvfrom(networkPacket *p, int socket) {
+  recv_exactly(socket, (char *)p, sizeof(networkPacket), 0);
   packet_ntoh(p); //Network byte order
 }
-
 
 //Network byte order
 void NetClient::packet_hton(networkPacket *p)
@@ -94,7 +66,6 @@ void NetClient::packet_ntoh(networkPacket *p)
     d += 4;
   }
 }
-
 
 void NetClient::sendto_exactly(int fd, const u8 *data, int n, struct sockaddr_in address)
 {

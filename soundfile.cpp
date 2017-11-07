@@ -5,6 +5,11 @@ SndfileHandle SoundFile::getSndfd() const
     return sndfd;
 }
 
+const char *SoundFile::getSoundFileName() const
+{
+    return soundFileName;
+}
+
 SoundFile::SoundFile()
 {
 

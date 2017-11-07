@@ -4,9 +4,9 @@
 #include "receiver.h"
 #include "sender.h"
 
-Sender senderObj;
+Sender senderObj, fpgaSender;
 Receiver recvObj;
-
+int modeSelected = 0;
 
 
 void jack_client_shutdown(void *arg) {
@@ -50,14 +50,14 @@ int jack_callback_sender (jack_nframes_t nframes, void *arg){
     int bytes_available = (int) jack_ringbuffer_write_space(senderObj.getRingBuffer());
     int bytes_to_write = nframes * sizeof(float) * senderObj.getChannels();
     if(bytes_to_write > bytes_available) {
-        printf ("jack-udp send: buffer overflow error (UDP thread late)\n");
+        printf ("Callback Sender: RingBuffer overflow (Maybe UDP thread late).\n");
     } else {
         senderObj.jack_ringbuffer_write_exactly(bytes_to_write);
     }
 
     char b = 1;
     if(write(senderObj.getComPipe(1), &b, 1)== -1) {
-        printf ("jack-udp send: error writing communication pipe.\n");
+        printf ("Callback Sender: Error writing communication pipe.\n");
         exit(1);
     }
     return 0;
@@ -91,7 +91,7 @@ int jack_callback_receiver (jack_nframes_t nframes, void *arg){
     int bytes_available = (int) jack_ringbuffer_read_space(recvObj.getRingBuffer());
     //Si no tiene suficiente informacion, reseta los punteros out.
     if(nbytes > bytes_available) {
-        printf("jack-udp recv: buffer underflow (%d > %d)\n",
+        printf("Receiver: RingBuffer underflow (%d > %d)\n",
                 nbytes, bytes_available);
         for(i = 0; i < nframes; i++) {
             for(j = 0; j < recvObj.getChannels(); j++) {
@@ -129,21 +129,22 @@ void *sender_thread(void *arg) {
     Sender *sender = (Sender *) arg;
     networkPacket p;                           //Network package
     p.index = 0;                          //Inicializa el indice a 0
-    int localIndex = 0;
+    uint32_t localIndex = 0;
 
     while(1) {
         sender->jack_ringbuffer_wait_for_read(sender->getPayloadBytes(),
-                                              sender->getComPipe(0));
+                                              sender->getComPipe(0), modeSelected);
 
         localIndex++;
         p.index = localIndex;
-        printf("Indice nuevo paquete. (%d) %d\n", p.index, localIndex);
         p.channels = sender->getChannels();
         p.frames = sender->getPayloadSamples() / sender->getChannels();
 
         sender->jack_ringbuffer_read_exactly((char *)&(p.data),
                                              sender->getPayloadBytes());
-        sender->packet_sendto(&p);
+        sender->packet_sendto(&p, sender->getSrSocketFD(),
+                              sender->getSrISAddress());
+        cout<<"New package sent to the receiver: "<<localIndex<<endl;
     }
     return NULL;
 }
@@ -154,33 +155,30 @@ void *sender_thread(void *arg) {
 void *receiver_thread(void *arg) {
     Receiver *receiver = (Receiver *) arg;
     networkPacket p;                       //Paquete P = Network
-    int next_packet = -1;
+    uint32_t nextPacket = 0;
 
     //Fichero
     FILE *filed;
-    if ((filed = fopen ("Test", "w")) == NULL) {
+    if ((filed = fopen ("Packet order Receiver", "w")) == NULL) {
         printf("Error opening the file. \n");
         exit(1);
     }
     else {
-        printf("File created. \n");
+        printf("Receiver package order file created. \n");
     }
 
     while(1) {
         //Llama al metodo para recibir 1 paquete de P.
-        receiver->packet_recv(&p);
+        receiver->packet_recvfrom(&p, receiver->getSrSocketFD());
 
         //Comprobaciones del indice y numero de canales
-        if(p.index != next_packet/* || next_packet != -1*/) {
-            printf("jack-udp recv: out of order packet "
-                    "arrival (Esperado, Recibido) (%d, %d)\n",
-                    next_packet, p.index);
-            //exit(1);
+        if(p.index != nextPacket) {
+            cout<<"Receiver: Out or order package arrival. Expected: "<<nextPacket
+               <<"  Arrived: "<<p.index<<endl;
         }
         if(p.channels != receiver->getChannels()) {
-            printf("jack-udp recv: channel mismatch packet "
-                    "arrival (Esperado, Recibido) (%d != %d)\n",
-                    p.channels, receiver->getChannels());
+            cout<<"Receiver: Number of channels mismatch. Expected: "
+               <<receiver->getChannels()<<"  Arrived: "<<p.channels<<endl;
             exit(1);
         }
 
@@ -188,17 +186,69 @@ void *receiver_thread(void *arg) {
         int bytes_available = (int) jack_ringbuffer_write_space(receiver->getRingBuffer());
         //Si no hay espacio, avisa.
         if(receiver->getPayloadBytes() > bytes_available) {
-            printf("jack-udp recv: buffer overflow (%d > %d)\n",
+            printf("Receiver: RingBuffer overflow (%d > %d)\n",
                     (int) receiver->getPayloadBytes(), bytes_available);
         } else {
             receiver->jack_ringbuffer_write_exactly((char *) p.data,
                                           (size_t) receiver->getPayloadBytes());
             //Fichero
-            fprintf(filed, "%d \n", p.index);
+            fprintf(filed, "%u \n", p.index);
         }
 
         //Actualiza el indice del paquete que debe llegar.
-        next_packet = p.index + 1;
+        nextPacket = p.index + 1;
+    }
+    return NULL;
+}
+
+
+//RECEIVE FROM FPGA
+void *receive_from_fpga_thread(void *arg) {
+    Sender *auxSender = (Sender *) arg;
+    networkPacket p;                       //Paquete P = Network
+    uint32_t nextPacket = 0;
+
+    //Fichero
+    FILE *filed;
+    if ((filed = fopen ("Packet order received from FPGA", "w")) == NULL) {
+        printf("Error opening the file. \n");
+        exit(1);
+    }
+    else {
+        printf("FPGA package order file created. \n");
+    }
+
+    while(1) {
+        //Llama al metodo para recibir 1 paquete de P.
+        auxSender->packet_recvfrom(&p, auxSender->getFpgaSocketFD());
+
+        //Comprobaciones del indice y numero de canales
+        if(p.index != nextPacket) {
+            cout<<"auxSender: Out or order package arrival from FPGA. "
+                  "Expected: "<<nextPacket<<"  Arrived: "<<p.index<<endl;
+        }
+        if(p.channels != auxSender->getChannels()) {
+            cout<<"auxSender: Number of channels mismatch from FPGA. Expected: "
+               <<auxSender->getChannels()<<"  Arrived: "<<p.channels<<endl;
+            exit(1);
+        }
+
+        //Comprueba el espacio que tiene para escribir en el RingBuffer
+        int bytes_available = (int) jack_ringbuffer_write_space(auxSender->getRingBuffer());
+        //Si no hay espacio, avisa.
+        if(auxSender->getPayloadBytes() > bytes_available) {
+            cout<<"Sender buffer overflow from FPGA. Available: "<<
+                  bytes_available<<"  Payload: "<<auxSender->getPayloadBytes()<<endl;
+            cout<<"Packet "<<p.index<<" discarded."<<endl;
+        } else {
+            auxSender->jack_ringbuffer_write_exactly((char *) p.data,
+                                          (size_t) auxSender->getPayloadBytes());
+            //Fichero
+            fprintf(filed, "%u \n", p.index);
+        }
+
+        //Actualiza el indice del paquete que debe llegar.
+        nextPacket = p.index + 1;
     }
     return NULL;
 }
@@ -207,19 +257,17 @@ void *receiver_thread(void *arg) {
 
 /*********************************** MAIN *************************************/
 int main () {
-    int modeSelected;
     int intAux;
-    pthread_t netcomThread;         //Thread to manage UDP communication
+    pthread_t netcomThread, netcomThread2;         //Thread to manage UDP communication
 
-    cout<<"Please select mode: 1. Sender - 2. Receiver \n";
+    cout<<"Please select mode: 1. Sender - 2. Receiver - 3. FPGA Receiver/Sender \n";
     cin>>modeSelected;
 
     if (modeSelected==1) { //Sender
         cout<<"Sender mode selected. \n";
-        senderObj.create_socket_connection();
-        senderObj.init_isAddress(1);
-        //senderObj.sender_socket_test();
+        senderObj.create_sr_socket_connection();
 
+        cout<<"Opening audio file with name: "<<senderObj.getSoundFileName()<<endl;
         senderObj.open_file();
 
         senderObj.open_jack_client("sender_client");
@@ -240,13 +288,14 @@ int main () {
                        sender_thread, &senderObj);
         if (intAux != 0)
             cout<<"Sender thread error. \n";
+
+        pthread_join(netcomThread, NULL);
+        senderObj.finish();
     }
-    else { //Receiver
+    else if (modeSelected == 2) { //Receiver
         cout<<"Receiver mode selected. \n";
-        recvObj.create_socket_connection();
-        recvObj.init_isAddress(2);
-        recvObj.bind_isAddress();
-        //recvObj.receiver_socket_test();
+        recvObj.create_sr_socket_connection();
+        recvObj.bind_sr_ISAddress();
 
         recvObj.create_file("WAVFile", 2, 44100, SF_FORMAT_WAV | SF_FORMAT_PCM_16);
 
@@ -268,16 +317,38 @@ int main () {
                        receiver_thread, &recvObj);
         if (intAux != 0)
             cout<<"Receiver thread error. \n";
-    }
 
-    //The pthread_join() function suspends execution of
-    //the calling thread until the target thread terminates
-    pthread_join(netcomThread, NULL);
-
-    if (modeSelected==1)
-        senderObj.finish();
-    else
+        pthread_join(netcomThread, NULL);
         recvObj.finish();
+    }
+    else if (modeSelected == 3) { //FPGA Sender
+        cout<<"FPGA Receiver/Sender mode selected. \n";
+        fpgaSender.create_fpga_socket_connection();
+        fpgaSender.bind_fpga_ISAddress();
+        fpgaSender.create_sr_socket_connection();
+
+
+        cout<<"Creating Receive from FPGA thread. \n";
+        intAux = pthread_create(&netcomThread,NULL,
+                       receive_from_fpga_thread, &fpgaSender);
+        if (intAux != 0)
+            cout<<"Receive from FPGA thread error. \n";
+
+
+        cout<<"Creating Sender thread. \n";
+        intAux = pthread_create(&netcomThread2,NULL,
+                       sender_thread, &fpgaSender);
+        if (intAux != 0)
+            cout<<"Sender thread error. \n";
+
+        pthread_join(netcomThread, NULL);
+        pthread_join(netcomThread2, NULL);
+        fpgaSender.finish();
+    }
+    else {
+        cout<<"Error. Mode not valid."<<endl;
+        return 0;
+    }
 
     pthread_exit(NULL);
     return 0;

@@ -21,6 +21,7 @@ public:
     void write_file();
     void read_file();
     SndfileHandle getSndfd() const;
+    const char *getSoundFileName() const;
 };
 
 #endif // SOUNDFILE_H

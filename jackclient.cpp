@@ -170,14 +170,17 @@ void JackClient::jack_port_make_standard(int mode)
 }
 
 
-int JackClient::jack_ringbuffer_wait_for_read(int payload, int pipeFd)
+int JackClient::jack_ringbuffer_wait_for_read(int payload, int pipeFd, int mode)
 {
     int spaceRB = (int) jack_ringbuffer_read_space(ringBuffer);
+    //cout<<"Space RB is: "<<spaceRB<<endl;
     while(spaceRB < payload) {
         char b;
-        if(read(pipeFd, &b, 1)== -1) {
-            printf("%s: error reading communication pipe\n", __func__);
-            exit(1);
+        if (mode == 1) { //Sender mode. Not in FPGA mode.
+            if(read(pipeFd, &b, 1)== -1) {
+                printf("%s: error reading communication pipe\n", __func__);
+                exit(1);
+            }
         }
         spaceRB = (int) jack_ringbuffer_read_space(ringBuffer);
     }
