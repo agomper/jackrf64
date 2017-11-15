@@ -40,12 +40,18 @@ float *JackClient::getJackBuffer() const
 }
 
 
+int JackClient::getJackBufferFrames() const
+{
+    return jackBufferFrames;
+}
+
 JackClient::JackClient() {
     options = JackNoStartServer; //No arranca JACK si no lo estaba.
     //JackNullOption; //Ninguna condicion a Jack Server, solo arranca.
-    channels = 2;
+    channels = 32;
+    jackBufferFrames = 4096;
     //Total = Num frames * Num channels * 32 bits
-    jackBufferSize = (4096*channels) * sizeof(float);
+    jackBufferSize = (jackBufferFrames*channels) * sizeof(float);
     //xmalloc(). The motto is succeed or die. If it fails to allocate memory,
     //it will terminate your program and print an error message
     jackBuffer = (float *) malloc(jackBufferSize);

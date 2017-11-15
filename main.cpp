@@ -7,6 +7,10 @@
 Sender senderObj, fpgaSender;
 Receiver recvObj;
 int modeSelected = 0;
+int lost_packages = 0;
+int aux_lp;
+int overflow_counter = 0;
+int underflow_counter = 0;
 
 
 void jack_client_shutdown(void *arg) {
@@ -68,9 +72,10 @@ int jack_callback_sender (jack_nframes_t nframes, void *arg){
 // Write data from ring buffer to JACK output ports.
 int jack_callback_receiver (jack_nframes_t nframes, void *arg){
     //Nframes = Frames/Period = = Buffer de JACK = 1024
-    if(nframes >= recvObj.getJackBufferSize()) {
+    if(nframes >= recvObj.getJackBufferFrames()) {
+        //system("clear");
         cout<< "Fatal error. Not enough space!. "
-               "JackRF64 buffer: "<<recvObj.getJackBufferSize()<<
+               "JackRF64 buffer frames: "<<recvObj.getJackBufferFrames()<<
                " and Frames: "<<nframes<<"\n";
         return -1;
     }
@@ -91,8 +96,10 @@ int jack_callback_receiver (jack_nframes_t nframes, void *arg){
     int bytes_available = (int) jack_ringbuffer_read_space(recvObj.getRingBuffer());
     //Si no tiene suficiente informacion, reseta los punteros out.
     if(nbytes > bytes_available) {
-        printf("Receiver: RingBuffer underflow (%d > %d)\n",
-                nbytes, bytes_available);
+        //printf("Receiver: RingBuffer underflow (%d > %d)\n",
+        //        nbytes, bytes_available);
+        underflow_counter++;
+        cout<<"Underflow counter: "<<underflow_counter<<endl;
         for(i = 0; i < nframes; i++) {
             for(j = 0; j < recvObj.getChannels(); j++) {
                 out[j][i] = (float) 0.0;
@@ -157,7 +164,7 @@ void *receiver_thread(void *arg) {
     networkPacket p;                       //Paquete P = Network
     uint32_t nextPacket = 0;
 
-    //Fichero
+    /*//Fichero
     FILE *filed;
     if ((filed = fopen ("Packet order Receiver", "w")) == NULL) {
         printf("Error opening the file. \n");
@@ -165,16 +172,20 @@ void *receiver_thread(void *arg) {
     }
     else {
         printf("Receiver package order file created. \n");
-    }
+    }*/
 
     while(1) {
         //Llama al metodo para recibir 1 paquete de P.
         receiver->packet_recvfrom(&p, receiver->getSrSocketFD());
 
         //Comprobaciones del indice y numero de canales
-        if(p.index != nextPacket) {
+        if((p.index != nextPacket) && (nextPacket != 0)) {
             cout<<"Receiver: Out or order package arrival. Expected: "<<nextPacket
                <<"  Arrived: "<<p.index<<endl;
+
+            aux_lp = p.index - nextPacket; //Test
+            lost_packages = lost_packages + aux_lp;
+            cout<<"Lost packages= "<<lost_packages<<endl;
         }
         if(p.channels != receiver->getChannels()) {
             cout<<"Receiver: Number of channels mismatch. Expected: "
@@ -186,13 +197,15 @@ void *receiver_thread(void *arg) {
         int bytes_available = (int) jack_ringbuffer_write_space(receiver->getRingBuffer());
         //Si no hay espacio, avisa.
         if(receiver->getPayloadBytes() > bytes_available) {
-            printf("Receiver: RingBuffer overflow (%d > %d)\n",
-                    (int) receiver->getPayloadBytes(), bytes_available);
+            //printf("Receiver: RingBuffer overflow (%d > %d)\n",
+            //        (int) receiver->getPayloadBytes(), bytes_available);
+            overflow_counter++;
+            cout<<"Overflow counter: "<<overflow_counter<<endl;
         } else {
             receiver->jack_ringbuffer_write_exactly((char *) p.data,
                                           (size_t) receiver->getPayloadBytes());
             //Fichero
-            fprintf(filed, "%u \n", p.index);
+            //fprintf(filed, "%u \n", p.index);
         }
 
         //Actualiza el indice del paquete que debe llegar.
@@ -208,7 +221,7 @@ void *receive_from_fpga_thread(void *arg) {
     networkPacket p;                       //Paquete P = Network
     uint32_t nextPacket = 0;
 
-    //Fichero
+    /*//Fichero
     FILE *filed;
     if ((filed = fopen ("Packet order received from FPGA", "w")) == NULL) {
         printf("Error opening the file. \n");
@@ -216,7 +229,7 @@ void *receive_from_fpga_thread(void *arg) {
     }
     else {
         printf("FPGA package order file created. \n");
-    }
+    }*/
 
     while(1) {
         //Llama al metodo para recibir 1 paquete de P.
@@ -244,7 +257,7 @@ void *receive_from_fpga_thread(void *arg) {
             auxSender->jack_ringbuffer_write_exactly((char *) p.data,
                                           (size_t) auxSender->getPayloadBytes());
             //Fichero
-            fprintf(filed, "%u \n", p.index);
+            //fprintf(filed, "%u \n", p.index);
         }
 
         //Actualiza el indice del paquete que debe llegar.
@@ -297,7 +310,7 @@ int main () {
         recvObj.create_sr_socket_connection();
         recvObj.bind_sr_ISAddress();
 
-        recvObj.create_file("WAVFile", 2, 44100, SF_FORMAT_WAV | SF_FORMAT_PCM_16);
+        recvObj.create_file("RF64File", 32, 48000, SF_FORMAT_RF64 | SF_FORMAT_PCM_24);
 
         recvObj.open_jack_client("receiver_client");
         //Sensibilidad de los mensajes de error a mostrar de Jack. Minimo.
